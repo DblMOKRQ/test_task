@@ -1,7 +1,10 @@
 package rest
 
 import (
+	_ "github.com/DblMOKRQ/test_task/docs"
 	"github.com/gin-gonic/gin"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 type handlers interface {
@@ -27,6 +30,9 @@ func NewRouter(handlers handlers) *Router {
 	return &Router{router: router, handlers: handlers}
 }
 
+// @title Test Task
+// @version 1.0
+// @description Это API для тестового задания.
 func (r *Router) Run(addr string) error {
 	r.router.POST("/add", r.handlers.AddUser)
 	r.router.DELETE("/delete/:id", r.handlers.DeleteUser)
@@ -37,6 +43,7 @@ func (r *Router) Run(addr string) error {
 	r.router.GET("/get/gender/:gender", r.handlers.GetUsersByGender)
 	r.router.GET("/get/name/:name", r.handlers.GetUsersByName)
 	r.router.GET("/get/all", r.handlers.GetAllUsers)
+	r.router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
 	r.router.Use(gin.Logger())
 	r.router.Use(gin.Recovery())

@@ -43,6 +43,3 @@ func main() {
 	}
 
 }
-
-// TODO:
-// 2. cfg
