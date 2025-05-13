@@ -1,0 +1,80 @@
+image: golang:1.24-alpine
+
+before_script:
+  - apk add --no-cache gcc musl-dev
+  - go mod download
+
+stages:
+  - vet
+  - test
+  - integration
+
+variables:
+  GO_VERSION: "1.21"
+  DB_PATH: "/tmp/test.db"
+
+vet:
+  stage: vet
+  image: golang:$GO_VERSION
+  script:
+    - go vet ./...
+
+test:
+  stage: test
+  image: golang:$GO_VERSION
+  script:
+    - go test -race -covermode=atomic -v ./...
+
+integration:
+  stage: integration
+  image: golang:$GO_VERSION
+  services:
+    - sqlite:latest
+  script:
+    - |
+      # Запуск API и Worker в фоне
+      
+      go build -o api ./cmd/server
+      go build -o worker ./cmd/worker
+      ./api -db $DB_PATH &
+      API_PID=$!
+      ./worker -db $DB_PATH &
+      WORKER_PID=$!
+      
+      # Даем сервисам время на запуск
+      sleep 5
+      
+      # Тест 1: Невалидный запрос
+      echo "Sending invalid request..."
+      INVALID_RESP=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8080/trades -d '{"invalid": "data"}')
+      if [ "$INVALID_RESP" != "400" ]; then
+        echo "Invalid request test failed. Got: $INVALID_RESP"
+        exit 1
+      fi
+      
+      # Тест 2: Валидный запрос
+      echo "Sending valid request..."
+      VALID_RESP=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8080/trades -H "Content-Type: application/json" -d '{
+        "account": "test123",
+        "symbol": "BTCUSD",
+        "volume": 1.5,
+        "open": 50000,
+        "close": 51000,
+        "side": "buy"
+      }')
+      if [ "$VALID_RESP" != "200" ]; then
+        echo "Valid request test failed. Got: $VALID_RESP"
+        exit 1
+      fi
+      
+      # Ожидание обработки воркером
+      sleep 2
+      
+      # Проверка статистики
+      echo "Checking stats..."
+      STATS_JSON=$(curl -s http://localhost:8080/stats/test123)
+      echo $STATS_JSON | grep '"trades":1' && echo '"profit":150000' || (echo "Stats validation failed"; exit 1)
+      
+      # Очистка
+      kill $API_PID
+      kill $WORKER_PID
