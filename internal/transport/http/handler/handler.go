@@ -1,23 +1,30 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"go.uber.org/zap"
 	"net/http"
 
 	"testtask/internal/domain"
-	"testtask/internal/service"
 	"testtask/internal/transport/http/dto"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
 )
 
-type Handler struct {
-	walletService service.WalletService
+type WalletService interface {
+	CreateWallet(ctx context.Context) (*domain.Wallet, error)
+	PerformOperation(ctx context.Context, wallet domain.OperationRequest) error
+	GetBalance(ctx context.Context, id uuid.UUID) (decimal.Decimal, error)
 }
 
-func NewHandler(walletService service.WalletService) *Handler {
+type Handler struct {
+	walletService WalletService
+}
+
+func NewHandler(walletService WalletService) *Handler {
 	return &Handler{
 		walletService: walletService,
 	}
